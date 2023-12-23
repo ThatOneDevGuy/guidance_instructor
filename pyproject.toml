@@ -17,6 +17,7 @@ requires-python = ">=3.7"
 dependencies = [
     "guidance",
     "pydantic",
+    "pyyaml"
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
