@@ -110,9 +110,9 @@ def generate_key_value_pair(
     Returns:
     -
     """
-    key = generate_str()
+    key = generate_str(None, depth)
     value = generate_field_by_type(value_type, depth + 1)
-    return f"{key}: {value}"
+    return key + ": " + value
 
 
 # Cache for key-values generation functions
@@ -137,15 +137,15 @@ def generate_dict_items(value_type: Union[FieldInfo, Type], depth: int = 0) -> M
         return _keyvals_cache[key]
 
     @guidance(stateless=True, dedent=False)
-    def result(lm: Model) -> Model:
-        indentation = "  " * depth
+    def result(lm: Model, prefix: str = "") -> Model:
+        if prefix:
+            indentation = prefix
+        else:
+            indentation = "\n" + "  " * depth
         return guidance.select(
             [
                 indentation + generate_key_value_pair(value_type, depth),
-                indentation
-                + generate_key_value_pair(value_type, depth)
-                + "\n"
-                + result(value_type, depth),
+                indentation + generate_key_value_pair(value_type, depth) + result(),
             ]
         )
 
@@ -155,7 +155,10 @@ def generate_dict_items(value_type: Union[FieldInfo, Type], depth: int = 0) -> M
 
 @guidance(stateless=True)
 def generate_dict(
-    lm: Model, field_info: Union[FieldInfo, GenericAlias] = None, depth: int = 0
+    lm: Model,
+    field_info: Union[FieldInfo, GenericAlias] = None,
+    depth: int = 0,
+    prefix: str = "",
 ) -> Model:
     """
     Generates a dictionary representation.
@@ -176,7 +179,7 @@ def generate_dict(
     return guidance.select(
         [
             "{}",
-            "\n" + generate_dict_items(value_type, depth)(),
+            generate_dict_items(value_type, depth)(prefix),
         ]
     )
 
@@ -205,15 +208,17 @@ def generate_list_items(
         return _items_cache[key]
 
     @guidance(stateless=True, dedent=False)
-    def result(lm: Model) -> Model:
-        indentation = "  " * depth + "- "
+    def result(lm: Model, prefix: str = "") -> Model:
+        if prefix:
+            indentation = prefix + "- "
+        else:
+            indentation = "  " * (depth - 1) + "- "
         return guidance.select(
             [
-                indentation + generate_field_by_type(field_info, depth),
-                indentation
-                + generate_field_by_type(field_info, depth)
+                generate_field_by_type(field_info, depth, prefix=indentation),
+                generate_field_by_type(field_info, depth, prefix=indentation)
                 + "\n"
-                + result(field_info, depth),
+                + result(),
             ]
         )
 
@@ -223,7 +228,10 @@ def generate_list_items(
 
 @guidance(stateless=True)
 def generate_list(
-    lm: Model, field_info: Union[FieldInfo, GenericAlias] = None, depth=0
+    lm: Model,
+    field_info: Union[FieldInfo, GenericAlias] = None,
+    depth=0,
+    prefix: str = "",
 ) -> Model:
     """
     Generates a list representation.
@@ -244,7 +252,7 @@ def generate_list(
     return guidance.select(
         [
             "[]",
-            "\n" + generate_list_items(item_type, depth + 1)(),
+            "\n" + generate_list_items(item_type, depth)(prefix),
         ]
     )
 
@@ -262,12 +270,12 @@ def _compile_context(field_info, depth: int, prefix: str = "") -> str:
     - A formatted string containing the context.
     """
     indentation = "  " * depth
-    return "".join(f"{indentation}# %s\n" % line for line in field_info.metadata)
+    return "\n".join(f"{indentation}# %s" % line for line in field_info.metadata)
 
 
 @guidance(stateless=True)
 def generate_field_by_type(
-    lm: Model, field_type: Union[FieldInfo, Type], depth: int
+    lm: Model, field_type: Union[FieldInfo, Type], depth: int, prefix: str = ""
 ) -> Model:
     """
     Parses a field based on its type and returns the corresponding string representation.
@@ -289,9 +297,9 @@ def generate_field_by_type(
 
     if isinstance(field_type, GenericAlias):
         if field_type.__origin__ == dict:
-            parsed_result = generate_dict(field_type, depth)
+            parsed_result = generate_dict(field_type, depth, prefix)
         elif field_type.__origin__ == list:
-            parsed_result = generate_list(field_type, depth)
+            parsed_result = generate_list(field_type, depth, prefix)
     elif isinstance(field_type, _UnionGenericAlias):
         union_options = []
         for union_arg in field_type.__args__:
@@ -302,15 +310,15 @@ def generate_field_by_type(
         parsed_result = guidance.select(union_options)
     elif isinstance(type(field_type), type):
         if field_type == int:
-            parsed_result = generate_int(field_type, depth)
+            parsed_result = prefix + generate_int(field_type, depth)
         elif field_type == float:
-            parsed_result = generate_float(field_type, depth)
+            parsed_result = prefix + generate_float(field_type, depth)
         elif field_type == str:
-            parsed_result = generate_str(field_type, depth)
+            parsed_result = prefix + generate_str(field_type, depth)
         elif issubclass(field_type, BaseModel):
-            parsed_result = generate_object(field_type, depth)
+            parsed_result = generate_object(field_type, depth, prefix)
         elif issubclass(field_type, Enum):
-            parsed_result = generate_enum(field_type, depth)
+            parsed_result = prefix + generate_enum(field_type, depth)
     else:
         raise Exception(f"Unsupported type: {field_type}")
 
@@ -327,7 +335,7 @@ def generate_field_by_type(
 
 @guidance(stateless=True)
 def generate_object(
-    lm: Model, pydantic_class: Type[BaseModel], depth: int = 0
+    lm: Model, pydantic_class: Type[BaseModel], depth: int = 0, prefix: str = ""
 ) -> Model:
     """
     Parses a Pydantic object and returns its string representation.
@@ -343,13 +351,32 @@ def generate_object(
     if isinstance(pydantic_class, FieldInfo):
         pydantic_class = pydantic_class.annotation
 
-    parsed_result = "\n"
-    indentation = "  " * depth
+    if prefix:
+        indentation = prefix
+    elif depth == 0:
+        indentation = "  " * depth
+    else:
+        indentation = "\n" + "  " * depth
+
+    parsed_result = ""
+    trailing_newline = False
+
     for field_name, field_info in pydantic_class.model_fields.items():
-        parsed_result += _compile_context(field_info, depth)
+        comment = _compile_context(field_info, depth)
+        if comment:
+            if not trailing_newline:
+                parsed_result += "\n"
+            parsed_result += comment + "\n"
+            trailing_newline = True
+
+        if trailing_newline:
+            indentation = indentation.lstrip("\n")
+
         parsed_result += f"{indentation}{field_name}: "
         parsed_result += generate_field_by_type(field_info, depth + 1)
-        parsed_result += "\n"
+        trailing_newline = False
+
+        indentation = "\n" + "  " * depth
 
     return parsed_result
 
@@ -373,9 +400,8 @@ def generate_pydantic_object(
     generation_output = str(lm)
     start_idx = generation_output.rfind(YAML_START_MARKER) + len(YAML_START_MARKER)
     end_idx = generation_output.rfind(YAML_END_MARKER)
-    pydantic_object = generation_output[start_idx:end_idx]
+    yaml_content = generation_output[start_idx:end_idx]
+    print(yaml_content)
+    pyantic_object = yaml.safe_load(yaml_content)
 
-    yaml_content_no_comments = re.sub("^#.*", "", pydantic_object, flags=re.MULTILINE)
-    pydantic_object = yaml.safe_load(yaml_content_no_comments)
-
-    return lm, pydantic_object
+    return lm, pyantic_object
