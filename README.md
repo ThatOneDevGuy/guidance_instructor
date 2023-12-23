@@ -6,6 +6,16 @@ This lets you reliably get structured outputs from open source LLMs using guidan
 - guidance is a library for restricting LLM outputs based on regular expressions and context free grammars.
 - pydantic is an OpenAPI-friendly library for defining data classes with strong typing and validation.
 
+This aims to provide similar functionality to [jnxl/instructor](https://github.com/jxnl/instructor).
+jnxl/instructor only works with OpenAI's API. This works with any guidance-compatible model, including
+all popular open source models.
+
+There are a few differences between this repo and jnxl/instructor:
+- The invocation is different. jnxl/instructor's API is highly coupled with OpenAI's API. this repo's API is coupled with guidance's API.
+- This repo doesn't support LLM validators or intelligent-retry-on-failure. If it turns out to be important, I can add this.
+- This repo supports per-field instructions for the LLM. The instructions are given to the LLM when generating each field.
+- This repo does not have built-in support for fine-tuning. jnxl/instructor is able to do this because it's coupled with OpenAI's APIs, which provide a standard way to fine-tune. For the sake of keeping things clean, I'd prefer to keep fine-tuning workflows separate from this repo.
+
 # Example
 ```python
 from enum import Enum
