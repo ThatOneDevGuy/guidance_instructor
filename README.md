@@ -56,3 +56,13 @@ with guidance.assistant():
 print(jack)
 # prints {'name': 'Jack', 'age': 30, 'favorite_fruit': 'apple'}
 ```
+
+# Debugging
+- Make sure you're using the user() and assistant() contextmanagers for chat-finetuned models.
+- guidance-ai/guidance uses pyformlang regexes, not python regexes.
+- Due to the use of pyformlang regexes, I had to manually write out valid
+characters. I only added the common ascii characters. If you need this to
+output other characters, you should edit the
+`guidance_instructor.guidance_instructor.UNESCAPED_STRING_CHARS` variable.
+For clarity, I'll likely provide a function to edit this in the future. If
+it's high priority for you, let me know.
