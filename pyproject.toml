@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project]
+name = "guidance_instructor"
+version = "0.0.1"
+authors = [
+  { name="That Dev", email="sunny@thatone.ai" },
+]
+description = ""
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "guidance",
+    "pydantic",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+]
+
