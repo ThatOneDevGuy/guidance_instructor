@@ -308,7 +308,7 @@ def generate_field_by_type(
         elif field_type == str:
             parsed_result = generate_str(field_type, depth)
         elif issubclass(field_type, BaseModel):
-            parsed_result = generate_pydantic_yaml(field_type, depth)
+            parsed_result = generate_object(field_type, depth)
         elif issubclass(field_type, Enum):
             parsed_result = generate_enum(field_type, depth)
     else:
@@ -326,7 +326,7 @@ def generate_field_by_type(
 
 
 @guidance(stateless=True)
-def generate_pydantic_yaml(
+def generate_object(
     lm: Model, pydantic_class: Type[BaseModel], depth: int = 0
 ) -> Model:
     """
@@ -343,7 +343,7 @@ def generate_pydantic_yaml(
     if isinstance(pydantic_class, FieldInfo):
         pydantic_class = pydantic_class.annotation
 
-    parsed_result = ""
+    parsed_result = "\n"
     indentation = "  " * depth
     for field_name, field_info in pydantic_class.model_fields.items():
         parsed_result += _compile_context(field_info, depth)
@@ -354,7 +354,9 @@ def generate_pydantic_yaml(
     return parsed_result
 
 
-def generate_pydantic_object(lm: Model, pydantic_class: Type[BaseModel]) -> Tuple[Model, BaseModel]:
+def generate_pydantic_object(
+    lm: Model, pydantic_class: Type[BaseModel]
+) -> Tuple[Model, BaseModel]:
     """
     Extracts a Pydantic object from the generated instructions.
 
@@ -366,7 +368,7 @@ def generate_pydantic_object(lm: Model, pydantic_class: Type[BaseModel]) -> Tupl
     - The language model with the extract data.
     - An instance of the specified Pydantic class, extracted from the generated instructions.
     """
-    lm += YAML_START_MARKER + generate_pydantic_yaml(pydantic_class) + YAML_END_MARKER
+    lm += YAML_START_MARKER + generate_object(pydantic_class) + YAML_END_MARKER
 
     generation_output = str(lm)
     start_idx = generation_output.rfind(YAML_START_MARKER) + len(YAML_START_MARKER)
