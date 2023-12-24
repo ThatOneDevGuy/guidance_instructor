@@ -23,7 +23,7 @@ from typing import Optional
 from typing_extensions import Annotated
 
 import guidance
-from guidance_instructor import generate_pydantic_object
+from guidance_instructor import generate_object
 from pydantic import BaseModel
 
 # Load a chat-finetuned mistral model
@@ -51,7 +51,7 @@ with guidance.assistant():
     # This returns an "lm" object, which can be continued for further generations, plus a
     # "jack" object, which contains a SimpleClass representation of Jack's information as
     # described in the user instruction above.
-    lm, jack = generate_pydantic_object(lm, SimpleClass)
+    lm, jack = generate_object(lm, SimpleClass)
 
 print(jack)
 # prints {'name': 'Jack', 'age': 30, 'favorite_fruit': 'apple'}
