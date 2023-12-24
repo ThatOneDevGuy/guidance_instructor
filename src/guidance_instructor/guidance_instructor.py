@@ -22,6 +22,18 @@ YAML_START_MARKER = "\n```yaml\n"
 YAML_END_MARKER = "\n```"
 
 
+def set_allowed_chars(chars: str) -> None:
+    """
+    Sets the allowed characters for string generation.
+
+    Args:
+    - chars: A string containing the allowed characters.
+    """
+    global UNESCAPED_STRING_CHARS, ALL_STRING_CHARS
+    UNESCAPED_STRING_CHARS = "".join(f"\\{x}" for x in chars)
+    ALL_STRING_CHARS = UNESCAPED_STRING_CHARS + r"\\\""
+
+
 @guidance(stateless=True)
 def generate_str(
     lm: Model, field_info: Union[FieldInfo, Type[str]], depth: int = 0
@@ -35,7 +47,7 @@ def generate_str(
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating the string
     """
     return guidance.gen(
         regex=rf'"([{UNESCAPED_STRING_CHARS}]|(\\[{ALL_STRING_CHARS}]))*"'
@@ -53,7 +65,7 @@ def generate_enum(lm: Model, enum_type: Type[Enum], depth: int = 0) -> Model:
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating a value from the enumeration.
     """
     choices = enum_type.__members__.keys()
     return guidance.select(choices)
@@ -72,7 +84,7 @@ def generate_int(
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating the integer.
     """
     return guidance.gen(regex=r"\d+")
 
@@ -90,7 +102,7 @@ def generate_float(
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating the float.
     """
     return guidance.gen(regex=r"\-?\d+\.\d+")
 
@@ -108,7 +120,7 @@ def generate_key_value_pair(
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating the pair.
     """
     key = generate_str(None, depth)
     value = generate_field_by_type(value_type, depth + 1)
@@ -129,7 +141,7 @@ def generate_dict_items(value_type: Union[FieldInfo, Type], depth: int = 0) -> M
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating the sequence.
     """
     global _keyvals_cache
     key = (value_type, depth)
@@ -169,7 +181,7 @@ def generate_dict(
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating the dictionary.
     """
     if isinstance(field_info, FieldInfo):
         field_info = field_info.annotation
@@ -200,7 +212,7 @@ def generate_list_items(
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating the sequence.
     """
     global _items_cache
     key = (field_info, depth)
@@ -242,7 +254,7 @@ def generate_list(
     - depth: The current indentation level for formatting.
 
     Returns:
-    -
+    - Model after generating the list.
     """
     if isinstance(field_info, FieldInfo):
         field_info = field_info.annotation
@@ -278,7 +290,7 @@ def generate_field_by_type(
     lm: Model, field_type: Union[FieldInfo, Type], depth: int, prefix: str = ""
 ) -> Model:
     """
-    Parses a field based on its type and returns the corresponding string representation.
+    Generates a field based on its type.
 
     Args:
     - language_model: The language model used for parsing.
@@ -286,7 +298,7 @@ def generate_field_by_type(
     - nesting_level: The current nesting level for indentation purposes.
 
     Returns:
-    -
+    - Model after generating the field.
     """
     is_required = True
     parsed_result = None
@@ -338,7 +350,7 @@ def generate_object(
     lm: Model, pydantic_class: Type[BaseModel], depth: int = 0, prefix: str = ""
 ) -> Model:
     """
-    Parses a Pydantic object and returns its string representation.
+    Generates a yaml config of an object based on a pydantic class.
 
     Args:
     - language_model: The language model used for parsing.
@@ -346,7 +358,7 @@ def generate_object(
     - nesting_level: The current nesting level for indentation purposes.
 
     Returns:
-    -
+    - Model after generating the object.
     """
     if isinstance(pydantic_class, FieldInfo):
         pydantic_class = pydantic_class.annotation
@@ -385,15 +397,15 @@ def generate_pydantic_object(
     lm: Model, pydantic_class: Type[BaseModel]
 ) -> Tuple[Model, BaseModel]:
     """
-    Extracts a Pydantic object from the generated instructions.
+    Generates a pydantic object.
 
     Args:
     - lm: The language model used to generate the instructions.
-    - pydantic_class: The Pydantic class defining the structure of the object to be extracted.
+    - pydantic_class: The pydantic class defining the structure of the object to be extracted.
 
     Returns:
-    - The language model with the extract data.
-    - An instance of the specified Pydantic class, extracted from the generated instructions.
+    - Model after generating a yaml config of the object.
+    - The object generated from the specified Pydantic class.
     """
     lm += YAML_START_MARKER + generate_object(pydantic_class) + YAML_END_MARKER
 
@@ -401,7 +413,7 @@ def generate_pydantic_object(
     start_idx = generation_output.rfind(YAML_START_MARKER) + len(YAML_START_MARKER)
     end_idx = generation_output.rfind(YAML_END_MARKER)
     yaml_content = generation_output[start_idx:end_idx]
-    print(yaml_content)
-    pyantic_object = yaml.safe_load(yaml_content)
+    dict_content = yaml.safe_load(yaml_content)
+    pydantic_object = pydantic_class(**dict_content)
 
-    return lm, pyantic_object
+    return lm, pydantic_object
