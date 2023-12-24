@@ -54,6 +54,19 @@ def generate_str(
     )
 
 
+def _escaped(s: str) -> str:
+    """
+    Escapes a string for use in a regex.
+
+    Args:
+    - s: The string to escape.
+
+    Returns:
+    - The escaped string.
+    """
+    return yaml.dump(s, explicit_end=None).strip()
+
+
 @guidance(stateless=True)
 def generate_enum(lm: Model, enum_type: Type[Enum], depth: int = 0) -> Model:
     """
@@ -67,8 +80,31 @@ def generate_enum(lm: Model, enum_type: Type[Enum], depth: int = 0) -> Model:
     Returns:
     - Model after generating a value from the enumeration.
     """
-    choices = enum_type.__members__.keys()
+    choices = [_escaped(x.value) for x in enum_type.__members__.values()]
     return guidance.select(choices)
+
+
+@guidance(stateless=True)
+def generate_bool(
+    lm: Model, field_info: Union[FieldInfo, Type[bool]], depth: int = 0
+) -> Model:
+    """
+    Generates a boolean.
+
+    Args:
+    - language_model: The language model used for generating booleans.
+    - field_info: Optional field information for additional context.
+    - depth: The current indentation level for formatting.
+
+    Returns:
+    - Model after generating the boolean.
+    """
+    return guidance.select(
+        [
+            "true",
+            "false",
+        ]
+    )
 
 
 @guidance(stateless=True)
@@ -287,7 +323,11 @@ def _compile_context(field_info, depth: int, prefix: str = "") -> str:
 
 @guidance(stateless=True)
 def generate_field_by_type(
-    lm: Model, field_type: Union[FieldInfo, Type], depth: int, prefix: str = ""
+    lm: Model,
+    field_type: Union[FieldInfo, Type],
+    depth: int,
+    prefix: str = "",
+    skip_keys={},
 ) -> Model:
     """
     Generates a field based on its type.
@@ -327,8 +367,10 @@ def generate_field_by_type(
             parsed_result = prefix + generate_float(field_type, depth)
         elif field_type == str:
             parsed_result = prefix + generate_str(field_type, depth)
+        elif field_type == bool:
+            parsed_result = prefix + generate_bool(field_type, depth)
         elif issubclass(field_type, BaseModel):
-            parsed_result = generate_object(field_type, depth, prefix)
+            parsed_result = generate_object(field_type, depth, prefix, skip_keys)
         elif issubclass(field_type, Enum):
             parsed_result = prefix + generate_enum(field_type, depth)
     else:
@@ -347,7 +389,11 @@ def generate_field_by_type(
 
 @guidance(stateless=True)
 def generate_object(
-    lm: Model, pydantic_class: Type[BaseModel], depth: int = 0, prefix: str = ""
+    lm: Model,
+    pydantic_class: Type[BaseModel],
+    depth: int = 0,
+    prefix: str = "",
+    skip_keys={},
 ) -> Model:
     """
     Generates a yaml config of an object based on a pydantic class.
@@ -374,6 +420,8 @@ def generate_object(
     trailing_newline = False
 
     for field_name, field_info in pydantic_class.model_fields.items():
+        if field_name in skip_keys:
+            continue
         comment = _compile_context(field_info, depth)
         if comment:
             if not trailing_newline:
@@ -394,7 +442,7 @@ def generate_object(
 
 
 def generate_pydantic_object(
-    lm: Model, pydantic_class: Type[BaseModel]
+    lm: Model, pydantic_class: Type[BaseModel], **kwargs
 ) -> Tuple[Model, BaseModel]:
     """
     Generates a pydantic object.
@@ -407,13 +455,36 @@ def generate_pydantic_object(
     - Model after generating a yaml config of the object.
     - The object generated from the specified Pydantic class.
     """
-    lm += YAML_START_MARKER + generate_object(pydantic_class) + YAML_END_MARKER
+    lm += YAML_START_MARKER
 
+    # Fill in the pre-filled fields
+    if kwargs:
+        kwargs = kwargs.copy()
+        # Convert any BaseModel objects to a dict
+        for key, value in kwargs.items():
+            if isinstance(value, BaseModel):
+                kwargs[key] = value.model_dump()
+
+        # Dump the kwargs into yaml
+        yaml_content = yaml.dump(kwargs, explicit_end=None)
+
+        # Add the yaml content to the generation result
+        lm += f"{yaml_content}"
+
+    # Generate the rest of the fields
+    lm += generate_field_by_type(pydantic_class, 0, skip_keys=kwargs) + YAML_END_MARKER
+
+    # Extract the yaml content
     generation_output = str(lm)
     start_idx = generation_output.rfind(YAML_START_MARKER) + len(YAML_START_MARKER)
     end_idx = generation_output.rfind(YAML_END_MARKER)
     yaml_content = generation_output[start_idx:end_idx]
     dict_content = yaml.safe_load(yaml_content)
-    pydantic_object = pydantic_class(**dict_content)
+
+    # Create the pydantic object
+    if issubclass(pydantic_class, BaseModel):
+        pydantic_object = pydantic_class(**dict_content)
+    else:
+        pydantic_object = dict_content
 
     return lm, pydantic_object
