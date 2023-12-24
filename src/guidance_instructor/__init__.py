@@ -1,1 +1,1 @@
-from .guidance_instructor import generate_pydantic_object
+from .guidance_instructor import generate_object

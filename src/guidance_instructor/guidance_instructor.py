@@ -370,7 +370,7 @@ def generate_field_by_type(
         elif field_type == bool:
             parsed_result = prefix + generate_bool(field_type, depth)
         elif issubclass(field_type, BaseModel):
-            parsed_result = generate_object(field_type, depth, prefix, skip_keys)
+            parsed_result = generate_basemodel(field_type, depth, prefix, skip_keys)
         elif issubclass(field_type, Enum):
             parsed_result = prefix + generate_enum(field_type, depth)
     else:
@@ -388,7 +388,7 @@ def generate_field_by_type(
 
 
 @guidance(stateless=True)
-def generate_object(
+def generate_basemodel(
     lm: Model,
     pydantic_class: Type[BaseModel],
     depth: int = 0,
@@ -441,7 +441,7 @@ def generate_object(
     return parsed_result
 
 
-def generate_pydantic_object(
+def generate_object(
     lm: Model, pydantic_class: Type[BaseModel], **kwargs
 ) -> Tuple[Model, BaseModel]:
     """

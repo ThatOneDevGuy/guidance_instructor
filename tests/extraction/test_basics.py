@@ -3,7 +3,7 @@ from typing import Optional
 from typing_extensions import Annotated
 
 import guidance
-from guidance_instructor import generate_pydantic_object
+from guidance_instructor import generate_object
 from pydantic import BaseModel
 
 
@@ -25,7 +25,7 @@ def test_direct_extraction(model):
         )
 
     with guidance.assistant():
-        lm, jack = generate_pydantic_object(lm, SimpleClass)
+        lm, jack = generate_object(lm, SimpleClass)
 
     assert jack.name.lower() == "jack"
     assert jack.age == 30
@@ -40,7 +40,7 @@ def test_direct_list_extraction(model):
         lm = model + "Repeat as a bulleted list: Jack, Jill."
 
     with guidance.assistant():
-        lm, obj = generate_pydantic_object(lm, NameList)
+        lm, obj = generate_object(lm, NameList)
 
     assert [x.lower() for x in obj.names] == ["jack", "jill"]
 
@@ -53,7 +53,7 @@ def test_field_instructions(model):
         lm = model + "Say apples, oranges."
 
     with guidance.assistant():
-        lm, obj = generate_pydantic_object(lm, FruitList)
+        lm, obj = generate_object(lm, FruitList)
 
     assert obj.fruits == ["APPLES", "ORANGES"]
 
@@ -85,7 +85,7 @@ def test_extract_complex_object(model):
         lm = model + f"Extract the following into an object: {story}"
 
     with guidance.assistant():
-        lm, obj = generate_pydantic_object(lm, Person)
+        lm, obj = generate_object(lm, Person)
 
     assert obj.name.lower() == "jackie"
     assert len(obj.attributes) > 0, "Failed to extract any of Jackie's attributes."
